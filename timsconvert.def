@@ -1,0 +1,66 @@
+# build new image using this command:
+# singularity build --force --fakeroot timsconvert.sif timsconvert.def
+# test env:
+# singularity exec --writable-tmpfs -e \
+# timsconvert.sif \
+# python /timsconvert/bin/run.py
+
+
+BootStrap: docker
+From: ubuntu:20.04
+
+%setup
+
+%environment
+    export PATH="/miniconda3/bin:$PATH"
+
+%post
+    apt-get update && apt-get -y upgrade
+
+    ln -fs /usr/share/zoneinfo/America/New_York /etc/localtime
+
+    apt-get -y install \
+    build-essential \
+    wget \
+    bzip2 \
+    ca-certificates \
+    git \
+    openjdk-17-jre \
+    cpanminus \
+    perl \
+    software-properties-common
+
+    rm -rf /var/lib/apt/lists/*
+    apt-get clean
+
+    cd /
+    wget -c https://repo.anaconda.com/miniconda/Miniconda3-py39_4.11.0-Linux-x86_64.sh
+    /bin/bash Miniconda3-py39_4.11.0-Linux-x86_64.sh -bfp /miniconda3
+    export PATH=/miniconda3/bin:$PATH
+    . /miniconda3/etc/profile.d/conda.sh
+
+    echo "__conda_setup="$('/miniconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"" >> $SINGULARITY_ENVIRONMENT
+    echo "if [ $? -eq 0 ]; then" >> $SINGULARITY_ENVIRONMENT
+    echo "    eval "$__conda_setup"" >> $SINGULARITY_ENVIRONMENT
+    echo "else" >> $SINGULARITY_ENVIRONMENT
+    echo "    if [ -f \"/miniconda3/etc/profile.d/conda.sh\" ]; then" >> $SINGULARITY_ENVIRONMENT
+    echo "        . \"/miniconda3/etc/profile.d/conda.sh\"" >> $SINGULARITY_ENVIRONMENT
+    echo "    else" >> $SINGULARITY_ENVIRONMENT
+    echo "        export PATH=\"/miniconda3/bin:$PATH\"" >> $SINGULARITY_ENVIRONMENT
+    echo "    fi" >> $SINGULARITY_ENVIRONMENT
+    echo "fi" >> $SINGULARITY_ENVIRONMENT
+    echo "unset __conda_setup" >> $SINGULARITY_ENVIRONMENT
+
+    conda install -y python=3.7
+    conda install -y -c bioconda nextflow
+
+    cd /
+    git clone -c core.symlinks=true https://www.github.com/gtluu/timsconvert
+    cd /timsconvert
+    pip install -r requirements.txt
+
+    cp /timsconvert/timsconvert/classes.py /timsconvert/timsconvert/classes.py.bak
+    sed -i 's/PasefFrameMsMsInfo/PasefFrameMsMsInfo/g' /timsconvert/timsconvert/classes.py
+
+
+    pip install git+https://github.com/gtluu/pyimzML
