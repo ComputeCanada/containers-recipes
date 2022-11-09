@@ -51,11 +51,11 @@ From: ubuntu:20.04
     echo "fi" >> $SINGULARITY_ENVIRONMENT
     echo "unset __conda_setup" >> $SINGULARITY_ENVIRONMENT
 
-    conda install -y python=3.7
-    conda install -y -c bioconda nextflow
+    conda install -y python=3.8
+    conda install -y -c bioconda nextflow=21.10.6
 
     cd /
-    git clone -c core.symlinks=true https://www.github.com/gtluu/timsconvert
+    git clone -c core.symlinks=true --branch v1.0.0 https://www.github.com/gtluu/timsconvert
     cd /timsconvert
     pip install -r requirements.txt
 
@@ -63,4 +63,4 @@ From: ubuntu:20.04
     sed -i 's/PasefFrameMsMsInfo/PasefFrameMsMsInfo/g' /timsconvert/timsconvert/classes.py
 
 
-    pip install git+https://github.com/gtluu/pyimzML
+    pip install git+https://github.com/gtluu/pyimzML.git@1.5.1
