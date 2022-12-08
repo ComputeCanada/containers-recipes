@@ -1,0 +1,59 @@
+# to build (on your computer)
+# singularity build --force --fakeroot interproscan_5.51-85.0.sif interpro.def
+
+# to execute:
+# wget ftp://ftp.ebi.ac.uk/pub/software/unix/iprscan/5/5.51-85.0/alt/interproscan-data-5.51-85.0.tar.gz
+# tar -xvzf interproscan-data-5.51-85.0.tar.gz
+# mkdir tmp
+# singularity exec --writable-tmpfs -e \
+# -B $PWD/:/workdir \
+# -B $PWD/interproscan-5.51-85.0/data:/opt/interproscan/data \
+# -B $PWD/tmp:/tmp \
+# interproscan_5.51-85.0.sif \
+# interproscan.sh \
+# --output-dir /workdir \
+# --input /path/to/in/fasta.fa \
+# --tempdir /tmp \
+# --disable-precalc --cpu 8 --goterms --iprlookup --pathways --verbose
+
+# -- OR --
+
+# apptainer exec \
+# -B $PWD/:/workdir \
+# -B $PWD/interproscan-5.51-85.0/data:/opt/interproscan/data \
+# -B $PWD/tmp:/tmp \
+# interproscan_5.51-85.0.sif \
+# /opt/interproscan/interproscan.sh \
+# --output-dir /workdir \
+# --input /path/to/in/fasta.fa \
+# --tempdir /tmp \
+# --disable-precalc --cpu 8 --goterms --iprlookup --pathways --verbose
+
+
+BootStrap: docker
+From: interpro/interproscan:5.51-85.0
+
+%setup
+
+%environment
+
+%post
+    apt-get update && apt-get -y upgrade
+    apt-get -y install git cmake gcc gfortran perl cpanminus
+
+    cpanm -i File::Slurp
+
+    cd /
+    git clone --depth 1 --branch v3.2.12 https://github.com/sib-swiss/pftools3.git
+    cd pftools3
+    mkdir build
+    cd build/
+    cmake -DCMAKE_INSTALL_PREFIX:PATH=$PWD -DSTANDALONE=ON -DUSE_PCRE2=OFF ..
+    make
+    make install
+
+    mv /opt/interproscan/bin/prosite/pfscanV3 /opt/interproscan/bin/prosite/pfscanV3.old
+    mv /opt/interproscan/bin/prosite/pfsearchV3 /opt/interproscan/bin/prosite/pfsearchV3.old
+
+    cp /pftools3/build/bin/pfscanV3 /opt/interproscan/bin/prosite/
+    cp /pftools3/build/bin/pfsearchV3 /opt/interproscan/bin/prosite/
