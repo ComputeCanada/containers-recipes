@@ -1,10 +1,20 @@
 # build new image using this command:
 # singularity build --force --fakeroot dRep.3.4.0.tmp.sif dRep.3.4.0.def
 
-## test
+# install the db to some path:
+# wget https://data.ace.uq.edu.au/public/CheckM_databases/checkm_data_2015_01_16.tar.gz
+# tar -xvzf checkm_data_2015_01_16.tar.gz
+
+# test:
 # singularity exec --writable-tmpfs -e \
 # dRep.3.4.0.sif \
 # dRep check_dependencies
+
+# run:
+# singularity exec --writable-tmpfs -e \
+# -B /path/to/checkmdb:/checkm \
+# dRep.3.4.0.sif \
+# dRep ....
 
 BootStrap: docker
 From: quay.io/biocontainers/drep:3.4.0--pyhdfd78af_0
