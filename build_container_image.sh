@@ -8,7 +8,7 @@ print_help_text() {
   printf "\nCreate a Singularity/Apptainer container. You can choose to make a sif file or a sandbox. Input source can be a def file, Dockerfile or Docker image.\n\n$SCRIPT [-h|-d|-s|-i] [-a <def file>] [-b <myproject/docker-repository-name>] [-c <docker image>] -t <tool_name_for_output_file/directory> -v <tool_version_for_output_file/directory>\n\n"
   echo "-a      build Apptainer image from def file recipe (<myfile.def>)"
   echo "-b      build Apptainer image from a Dockerfile. You must run this script from the directory containing the Dockerfile. The value required by this option is the image name to be created, e.g. projectname/repository-name, i.e. the value expected if you were to run 'docker build -t myproject/repository-name .'"
-  echo "-c      create Apptainer image from Docker image (<myimage:mytag>"
+  echo "-c      create Apptainer image from Docker image (<myimage:mytag>)"
   echo "-t      name of the tool container to build. This will be combined with the version to make either the sif file name being built (option -i) or the directory in which the image files will be placed (option -s) e.g. enter '/home/myusername/mynewtool' to create /home/myusername/mynewtool-1.0.0 or /home/myusername/mynewtool-1.0.0.sif (depending on the version and sandbox/sif mode entered). Lack of path will create the new file(s) in the current working directory."
   echo "-v      version of the tool to be added to the output filename e.g. '1.28'. This is combined with the tool name prefix to create for example mytool-1.28.sif or mytool-1.28/"
   echo "-s      make sandbox. This is a directory containing all the image files and is writable. Either -i or -s must be chosen. Not both."
@@ -49,9 +49,9 @@ done
 # debug statements
 #echo "def_file       = $def_file";
 #echo "dockerproject  = $dockerproject";
-echo "tool_name      = $tool_name";
-echo "sandbox_mode   = $sandbox_mode";
-echo "sif_image_mode = $sif_image_mode";
+#echo "tool_name      = $tool_name";
+#echo "sandbox_mode   = $sandbox_mode";
+#echo "sif_image_mode = $sif_image_mode";
 #echo "version        = $version";
 #echo "docker_image   = $docker_image";
 #echo "dry_run        = $dry_run";
@@ -67,7 +67,7 @@ then
   exit 1
 fi
 
-if [ $sandbox_mode = true ] && [ $sif_image_mode = true ]; 
+if [ $sandbox_mode = true ] && [ $sif_image_mode = true ];
 then
   echo "ERROR: Please choose to create the Apptainer image as either a sif file (-i) or sandbox directory of files (-s). Not both."
   exit 1
@@ -93,14 +93,14 @@ then
 fi
 
 # if version is absent or not numeric, bail.
-if  [ -z $version ]; 
+if  [ -z $version ];
 then
   echo "ERROR: Version missing. You must enter a version number for the tool. This will be added into the sif file name."
   exit 1;
-else 
+else
   regex='^[0-9]+([.][0-9]+)*$'
   if ! [[ $version =~ $regex ]] ; then
-    echo "ERROR: Version (-v) option is not a valid number."; 
+    echo "ERROR: Version (-v) option is not a valid number.";
     exit 1;
   fi
 fi
@@ -109,7 +109,7 @@ fi
 tool_name=${tool_name%.sif}
 
 # if no tool name is entered, bail. Otherwise, build the full sif file/directory name.
-if [ -z $tool_name ]; 
+if [ -z $tool_name ];
 then
   echo "ERROR: Absent tool name (-t <tool_name>) in arguments provided. This is the prefix of the file or directory being built by the script and will have the -v version number added (final result example: mytool-2.34 directory or mytool-2.34.sif). This file or directory must *not* already exist."
   exit 1;
@@ -124,15 +124,21 @@ else
 fi
 
 # if building a sif file from a dockerfile or image, 
-# docker must be installed, or bail.
+# podman must be installed, or bail.
 if [ ! -z $dockerproject ] || [ ! -z $docker_image ];
 then
-  if ! command -v docker &> /dev/null
+  if ! command -v podman &> /dev/null
   then
-    echo "ERROR: docker is not installed. It is required to build a sif file from a Dockerfile or docker image"
+    `module load podman`
+  fi
+
+  if ! command -v podman &> /dev/null
+  then
+    echo "ERROR: podman will not install using the command 'module load podman'. It is required to build a sif file from a Dockerfile or docker image"
     exit 1;
   fi
 fi
+
 
 # if sif file already exists, bail. Likewise for sandbox directory if requested.
 if [ $sif_image_mode = true ] && [ -f "${tool_and_version}.sif" ];
@@ -194,22 +200,22 @@ if [ ! -z $def_file ]; then
   fi
 fi
 
-
-# if we've reached this stage, we need to be root to access the docker images
-if [ "$EUID" -ne 0 ]
-  then echo "Please run as root, so the script can access docker images"
-  exit
-fi
+# We've upgraded this script to using podman which does not need root privs.
+## if we've reached this stage, we need to be root to access the docker images
+##if [ "$EUID" -ne 0 ]
+##  then echo "Please run as root, so the script can access podman images"
+##  exit
+##fi
 
 
 # mode 2: build apptainer image from Dockerfile
 if [ ! -z $dockerproject ]; then
 
-  cmd1="docker build -t $dockerproject ."
+  cmd1="podman build -t $dockerproject ."
   if [ $sandbox_mode = true ]; then
-    cmd2="apptainer build --sandbox $tool_and_version $(docker images | awk '{print $1}' | awk 'NR==2')"
+    cmd2="apptainer build --sandbox $tool_and_version $(podman images | awk '{print $1}' | awk 'NR==2')"
   else
-    cmd2="apptainer build ${tool_and_version}.sif $(docker images | awk '{print $1}' | awk 'NR==2')"
+    cmd2="apptainer build ${tool_and_version}.sif $(podman images | awk '{print $1}' | awk 'NR==2')"
   fi
 
   if [ $dry_run = true ]; then
@@ -220,7 +226,7 @@ if [ ! -z $dockerproject ]; then
     printf "** Running: $cmd1\n"
     $cmd1 && command1_success=1
 
-    if [ $command1_success = 1 ]; then 
+    if [ $command1_success = 1 ]; then
       printf "\n** Running: $cmd2\n"
       $cmd2 && command2_success=1
     fi
@@ -251,15 +257,23 @@ fi
 if [ ! -z $docker_image ]; then
 
   # bail if docker image not found
-  if [ -z "$(docker images -q $docker_image)" ]; then
+  if [ -z "$(podman images -q $docker_image)" ]; then
     echo "ERROR: Docker image $docker_image not found locally"
     exit 1
+  fi
+
+  # add "docker://" prefix to image name for build command
+  docker_image_regex="^docker://.*"
+
+  if [ ! -z $docker_image ] && ! [[ "$docker_image" =~ $docker_image_regex ]];
+  then
+    docker_image="docker://$docker_image"
   fi
 
   if [ $sandbox_mode = true ]; then
     cmd="apptainer build --sandbox $tool_and_version $docker_image"
   else
-    cmd="apptainer build $tool_and_version $docker_image"
+    cmd="apptainer build ${tool_and_version}.sif $docker_image"
   fi
 
   if [ $dry_run = true ]; then
@@ -280,4 +294,4 @@ if [ ! -z $docker_image ]; then
   else
     exit 0; # exit from dry run
   fi
-fi
+fi                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
