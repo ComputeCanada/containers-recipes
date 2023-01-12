@@ -4,6 +4,9 @@
 
 SCRIPT=$(readlink -f "$0")
 
+TARGET_DIR=$PWD
+TARGET_CONTAINER=
+
 print_help_text() {
   printf "\nCreate a Singularity/Apptainer container. You can choose to make a sif file or a sandbox. Input source can be a def file, Dockerfile or Docker image.\n\n$SCRIPT [-h|-d|-s|-i] [-a <def file>] [-b <myproject/docker-repository-name>] [-c <docker image>] -t <tool_name_for_output_file/directory> -v <tool_version_for_output_file/directory>\n\n"
   echo "-a      build Apptainer image from def file recipe (<myfile.def>)"
@@ -117,11 +120,13 @@ else
   # build sif file name: toolname-version.sif
   tool_and_version="$tool_name-$version"
   if [ $sandbox_mode = true ]; then
-    printf "Building $tool_and_version\n"
+    TARGET_CONTAINER="$TARGET_DIR/$tool_and_version"
   else
-    printf "Building $tool_and_version.sif\n"
+    TARGET_CONTAINER="$TARGET_DIR/$tool_and_version.sif"
   fi
+  printf "Building $TARGET_CONTAINER\n"
 fi
+
 
 # if building a sif file from a dockerfile or image, 
 # podman must be installed, or bail.
@@ -140,16 +145,10 @@ then
 fi
 
 
-# if sif file already exists, bail. Likewise for sandbox directory if requested.
-if [ $sif_image_mode = true ] && [ -f "${tool_and_version}.sif" ];
-then
-  echo "ERROR: sif file already exists: $tool_and_version.sif"
-  echo "Please move this file before continuing."
-  exit 1;
-elif [ $sandbox_mode = true ] && [ -d $tool_and_version ]; then
-  echo "ERROR: sandbox directory already exists: $tool_and_version"
-  echo "Please move this file before continuing."
-  exit 1;
+# if container already exists, bail
+if [[ -e "$TARGET_CONTAINER" ]]; then
+	echo "ERROR: container $TARGET_CONTAINER already exists. Please remove it before continuing."
+	exit 1
 fi
 
 #----------------------------------------------------------------
@@ -164,7 +163,7 @@ apptainer version
 command1_success=0
 command2_success=0
 failed_msg="\nERROR: build failed\n"
-success_msg="\nBuild completed successfully!\nNew Apptainer/Singularity image: $tool_and_version"
+success_msg="\nBuild completed successfully!\nNew Apptainer/Singularity image: $TARGET_CONTAINER"
 if [ $sif_image_mode = true ]; then
   success_msg+=".sif"
 fi
@@ -173,10 +172,10 @@ success_msg+="\n"
 # mode 1: build apptainer image from def file
 if [ ! -z $def_file ]; then
   if [ $sandbox_mode = true ]; then
-    cmd="apptainer build --force --sandbox $tool_and_version $def_file"
+    cmd="apptainer build --force --sandbox $TARGET_CONTAINER $def_file"
     echo "Building image in sandbox directory from def file (creating Apptainer image from recipe)"
   else
-    cmd="apptainer build --force ${tool_and_version}.sif $def_file"
+    cmd="apptainer build --force $TARGET_CONTAINER $def_file"
     echo "Building sif file from def file (creating Apptainer image from recipe)"
   fi
 
@@ -213,9 +212,9 @@ if [ ! -z $dockerproject ]; then
 
   cmd1="podman build -t $dockerproject ."
   if [ $sandbox_mode = true ]; then
-    cmd2="apptainer build --sandbox $tool_and_version $(podman images | awk '{print $1}' | awk 'NR==2')"
+    cmd2="apptainer build --sandbox $TARGET_CONTAINER $(podman images | awk '{print $1}' | awk 'NR==2')"
   else
-    cmd2="apptainer build ${tool_and_version}.sif $(podman images | awk '{print $1}' | awk 'NR==2')"
+    cmd2="apptainer build $TARGET_CONTAINER $(podman images | awk '{print $1}' | awk 'NR==2')"
   fi
 
   if [ $dry_run = true ]; then
@@ -271,9 +270,9 @@ if [ ! -z $docker_image ]; then
   fi
 
   if [ $sandbox_mode = true ]; then
-    cmd="apptainer build --sandbox $tool_and_version $docker_image"
+    cmd="apptainer build --sandbox $TARGET_CONTAINER $docker_image"
   else
-    cmd="apptainer build ${tool_and_version}.sif $docker_image"
+    cmd="apptainer build $TARGET_CONTAINER $docker_image"
   fi
 
   if [ $dry_run = true ]; then
