@@ -38,7 +38,7 @@ fi
 
 dry_run=false
 #retrieve arguments with flags
-while getopts "a:b:c:v:t:sihd" opt; do
+while getopts "a:b:c:v:t:n:hd" opt; do
     case $opt in
         a) def_file=$OPTARG;;
         b) dockerproject=$OPTARG;;
