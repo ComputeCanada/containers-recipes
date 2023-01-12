@@ -163,11 +163,7 @@ apptainer version
 command1_success=0
 command2_success=0
 failed_msg="\nERROR: build failed\n"
-success_msg="\nBuild completed successfully!\nNew Apptainer/Singularity image: $TARGET_CONTAINER"
-if [ $sif_image_mode = true ]; then
-  success_msg+=".sif"
-fi
-success_msg+="\n"
+success_msg="\nBuild completed successfully!\nNew Apptainer/Singularity image: $TARGET_CONTAINER\n"
 
 # mode 1: build apptainer image from def file
 if [ ! -z $def_file ]; then
