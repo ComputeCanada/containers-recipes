@@ -294,4 +294,4 @@ if [ ! -z $docker_image ]; then
   else
     exit 0; # exit from dry run
   fi
-fi                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
+fi  
