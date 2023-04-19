@@ -6,18 +6,26 @@ SCRIPT=$(readlink -f "$0")
 
 TARGET_DIR=$PWD
 TARGET_CONTAINER=
+SIF_ALLOWED=0
+SANDBOX_ALLOWED=1
+
 
 print_help_text() {
-  printf "\nCreate a Singularity/Apptainer container. You can choose to make a sif file or a sandbox. Input source can be a def file, Dockerfile or Docker image.\n\n$SCRIPT [-h|-d|-s|-i] [-a <def file>] [-b <myproject/docker-repository-name>] [-c <docker image>] -t <tool_name_for_output_file/directory> -v <tool_version_for_output_file/directory>\n\n"
+  printf "\nCreate a Singularity/Apptainer container. You can choose to make a sif file or a sandbox. Input source can be a def file, Dockerfile or Docker image.\n\n$SCRIPT [-h|-d] -t <sandbox|sif> [-a <def file>] [-b <myproject/docker-repository-name>] [-c <docker image>] -n <tool_name_for_output_file/directory> -v <tool_version_for_output_file/directory>\n\n"
   echo "-a      build Apptainer image from def file recipe (<myfile.def>)"
   echo "-b      build Apptainer image from a Dockerfile. You must run this script from the directory containing the Dockerfile. The value required by this option is the image name to be created, e.g. projectname/repository-name, i.e. the value expected if you were to run 'docker build -t myproject/repository-name .'"
   echo "-c      create Apptainer image from Docker image (<myimage:mytag>)"
-  echo "-t      name of the tool container to build. This will be combined with the version to make either the sif file name being built (option -i) or the directory in which the image files will be placed (option -s) e.g. enter '/home/myusername/mynewtool' to create /home/myusername/mynewtool-1.0.0 or /home/myusername/mynewtool-1.0.0.sif (depending on the version and sandbox/sif mode entered). Lack of path will create the new file(s) in the current working directory."
+  echo "-n      name of the tool container to build. This will be combined with the version to make the container (either sif or directory) e.g. enter 'mynewtool' to create mynewtool-1.0.0 or mynewtool-1.0.0.sif (depending on the version and sandbox/sif mode entered). Will be created relative to the current working directory."
   echo "-v      version of the tool to be added to the output filename e.g. '1.28'. This is combined with the tool name prefix to create for example mytool-1.28.sif or mytool-1.28/"
-  echo "-s      make sandbox. This is a directory containing all the image files and is writable. Either -i or -s must be chosen. Not both."
-  echo "-i      make sif file. This file is like a compressed directory structure and is read-only. Either -i or -s must be chosen. Not both."
+  echo "-t      type of container to build. Either sandbox or sif, i.e. -t <sandbox|sif>"
   echo "-d      Dry run - commands are displayed, but not run"
   echo "-h      show help text"
+  if [[ $SIF_ALLOWED -eq 0 ]]; then
+	  echo "Note: creating SIF images is disabled"
+  fi
+  if [[ "$SANDBOX_ALLOWED" -eq 0 ]]; then
+	  echo "Note: creating sandbox containers is disabled"
+  fi
   printf "\n"
 }
 
@@ -29,18 +37,15 @@ then
 fi
 
 dry_run=false
-sandbox_mode=false
-sif_image_mode=false
 #retrieve arguments with flags
-while getopts "a:b:c:v:t:sihd" opt; do
+while getopts "a:b:c:v:t:n:hd" opt; do
     case $opt in
         a) def_file=$OPTARG;;
         b) dockerproject=$OPTARG;;
         c) docker_image=$OPTARG;;
         v) version=$OPTARG;;
-        t) tool_name=$OPTARG;;
-        s) sandbox_mode=true;;
-        i) sif_image_mode=true;;
+        n) tool_name=$OPTARG;;
+	t) container_type=$OPTARG;;
         h) print_help_text;
            exit 0;;
         d) dry_run=true;;
@@ -53,8 +58,7 @@ done
 #echo "def_file       = $def_file";
 #echo "dockerproject  = $dockerproject";
 #echo "tool_name      = $tool_name";
-#echo "sandbox_mode   = $sandbox_mode";
-#echo "sif_image_mode = $sif_image_mode";
+#echo "container_type = $container_type";
 #echo "version        = $version";
 #echo "docker_image   = $docker_image";
 #echo "dry_run        = $dry_run";
@@ -70,16 +74,21 @@ then
   exit 1
 fi
 
-if [ $sandbox_mode = true ] && [ $sif_image_mode = true ];
-then
-  echo "ERROR: Please choose to create the Apptainer image as either a sif file (-i) or sandbox directory of files (-s). Not both."
-  exit 1
-elif  [ $sandbox_mode = false ] && [ $sif_image_mode = false ];
-then
-  echo "ERROR: Please choose to create the Apptainer image as either a sif file (-i) or sandbox directory of files (-s). One of these 2 options is required."
-  exit 1
+if [[ "$container_type" != "sandbox" && "$container_type" != "sif" ]]; then
+	echo "Unknown container type requested: $container_type. Valid values are <sif|container>."
 fi
-
+if [[ "$container_type" == "sif" && "$SIF_ALLOWED" -eq 0 ]]; 
+	echo "sif container requested, but sif support disabled. Please build the container as a sandbox"
+	exit 1;
+fi
+if [[ "$container_type" == "sandbox" && "$SANDBOX_ALLOWED" -eq 0 ]]; 
+	echo "sandbox container requested, but sandbox support disabled. Please build the container as a sif image"
+	exit 1;
+fi
+APPTAINER_ARGS=()
+if [[ "$container_type" == "sandbox" ]]; then
+	APPTAINER_ARGS+=(--sandbox)
+fi
 
 # if string is defined and file does not exist, bail.
 if [ ! -z $def_file ] && [ ! -f $def_file ];
@@ -114,12 +123,12 @@ tool_name=${tool_name%.sif}
 # if no tool name is entered, bail. Otherwise, build the full sif file/directory name.
 if [ -z $tool_name ];
 then
-  echo "ERROR: Absent tool name (-t <tool_name>) in arguments provided. This is the prefix of the file or directory being built by the script and will have the -v version number added (final result example: mytool-2.34 directory or mytool-2.34.sif). This file or directory must *not* already exist."
+  echo "ERROR: Absent tool name (-n <tool_name>) in arguments provided. This is the prefix of the file or directory being built by the script and will have the -v version number added (final result example: mytool-2.34 directory or mytool-2.34.sif). This file or directory must *not* already exist."
   exit 1;
 else
   # build sif file name: toolname-version.sif
   tool_and_version="$tool_name-$version"
-  if [ $sandbox_mode = true ]; then
+  if [[ "$container_type" == "sandbox" ]]; then
     TARGET_CONTAINER="$TARGET_DIR/$tool_and_version"
   else
     TARGET_CONTAINER="$TARGET_DIR/$tool_and_version.sif"
@@ -167,13 +176,8 @@ success_msg="\nBuild completed successfully!\nNew Apptainer/Singularity image: $
 
 # mode 1: build apptainer image from def file
 if [ ! -z $def_file ]; then
-  if [ $sandbox_mode = true ]; then
-    cmd="apptainer build --force --sandbox $TARGET_CONTAINER $def_file"
-    echo "Building image in sandbox directory from def file (creating Apptainer image from recipe)"
-  else
-    cmd="apptainer build --force $TARGET_CONTAINER $def_file"
-    echo "Building sif file from def file (creating Apptainer image from recipe)"
-  fi
+  cmd="apptainer build ${APPTAINER_ARGS[@]} $TARGET_CONTAINER $def_file"
+  echo "Building from def file (creating Apptainer image from recipe"
 
   if [ $dry_run = true ]; then
     printf "Command that runs when not in dry_run (-d) mode:\n  $cmd\n"
@@ -207,11 +211,7 @@ fi
 if [ ! -z $dockerproject ]; then
 
   cmd1="podman build -t $dockerproject ."
-  if [ $sandbox_mode = true ]; then
-    cmd2="apptainer build --sandbox $TARGET_CONTAINER $(podman images | awk '{print $1}' | awk 'NR==2')"
-  else
-    cmd2="apptainer build $TARGET_CONTAINER $(podman images | awk '{print $1}' | awk 'NR==2')"
-  fi
+  cmd2="apptainer build ${APPTAINER_ARGS[@]} $TARGET_CONTAINER $(podman images | awk '{print $1}' | awk 'NR==2')"
 
   if [ $dry_run = true ]; then
     printf "Commands that run when not in dry_run (-d) mode:\n"
@@ -265,12 +265,8 @@ if [ ! -z $docker_image ]; then
     docker_image="docker://$docker_image"
   fi
 
-  if [ $sandbox_mode = true ]; then
-    cmd="apptainer build --sandbox $TARGET_CONTAINER $docker_image"
-  else
-    cmd="apptainer build $TARGET_CONTAINER $docker_image"
-  fi
-
+  cmd="apptainer build ${APPTAINER_ARGS[@]} $TARGET_CONTAINER $docker_image"
+  
   if [ $dry_run = true ]; then
     printf "Command that runs when not in dry_run (-d) mode:\n\t$cmd\n"
   else
