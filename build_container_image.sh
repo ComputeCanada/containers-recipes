@@ -76,12 +76,13 @@ fi
 
 if [[ "$container_type" != "sandbox" && "$container_type" != "sif" ]]; then
 	echo "Unknown container type requested: $container_type. Valid values are <sif|container>."
+	exit 1;
 fi
-if [[ "$container_type" == "sif" && "$SIF_ALLOWED" -eq 0 ]]; 
+if [[ "$container_type" == "sif" && "$SIF_ALLOWED" -eq 0 ]]; then
 	echo "sif container requested, but sif support disabled. Please build the container as a sandbox"
 	exit 1;
 fi
-if [[ "$container_type" == "sandbox" && "$SANDBOX_ALLOWED" -eq 0 ]]; 
+if [[ "$container_type" == "sandbox" && "$SANDBOX_ALLOWED" -eq 0 ]]; then
 	echo "sandbox container requested, but sandbox support disabled. Please build the container as a sif image"
 	exit 1;
 fi
