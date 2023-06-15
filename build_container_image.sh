@@ -7,13 +7,12 @@ SCRIPT=$(readlink -f "$0")
 TARGET_DIR=$PWD
 SOURCE_DIR=$PWD
 TARGET_CONTAINER=
-SIF_ALLOWED=0
+SIF_ALLOWED=1
 SANDBOX_ALLOWED=1
 
 
 print_help_text() {
-  printf "\nCreate a Singularity/Apptainer container. You can choose to make a sif file or a sandbox. Input source can be a def file, Dockerfile or Docker image.\n\n$SCRIPT [-h|-d] -t <sandbox|sif> [-b <myproject/docker-repository-name>] -n <tool_name_for_output_file/directory> -v <tool_version_for_output_file/directory>\n\n"
-  echo "-b      build Apptainer image from a Dockerfile. The value required by this option is the image name to be created, e.g. projectname/repository-name, i.e. the value expected if you were to run 'docker build -t myproject/repository-name .'"
+  printf "\nCreate a Singularity/Apptainer container. You can choose to make a sif file or a sandbox. Input source can be a def file, Dockerfile or Docker image.\n\n$SCRIPT [-h|-d] -t <sandbox|sif> -n <tool_name_for_output_file/directory> -v <tool_version_for_output_file/directory>\n\n"
   echo "-i      Input source type, one of <def|Dockerfile|image>"
   echo "-n      name of the tool container to build. This will be combined with the version to make the container (either sif or directory) e.g. enter 'mynewtool' to create mynewtool-1.0.0 or mynewtool-1.0.0.sif (depending on the version and sandbox/sif mode entered). Will be created relative to the current working directory."
   echo "-s      Source to use. Can be a def file, Dockerfile or Docker image name, according to the option -i"
@@ -39,9 +38,8 @@ fi
 
 dry_run=false
 #retrieve arguments with flags
-while getopts "b:v:t:n:s:i:hd" opt; do
+while getopts "v:t:n:s:i:hd" opt; do
     case $opt in
-        b) dockerproject=$OPTARG;;
 	s) source_name=$OPTARG;;
 	i) source_type=$OPTARG;;
         v) version=$OPTARG;;
@@ -83,10 +81,6 @@ if [[ "$source_type" == "def" || "$source_type" == "Dockerfile" ]]; then
 		echo "ERROR: File not found $source_file"
 		exit 1;
 	fi
-fi
-if [[ "$source_type" == "Dockerfile" && -z $dockerproject ]]; then
-	echo "ERROR: When using a Dockerfile, you must specify the name of a docker project (option -b)"
-	exit 1
 fi
 if [[ "$container_type" != "sandbox" && "$container_type" != "sif" ]]; then
 	echo "ERROR: Unknown container type requested: $container_type. Valid values for option -t are <sif|sandbox>."
@@ -167,7 +161,7 @@ fi
 
 echo "Loading apptainer modules..."
 #module use /cvmfs/soft-dev.computecanada.ca/easybuild/modules/2020/Core
-module load apptainer/1.1.3
+module load apptainer/1.1
 printf "apptainer version: "
 apptainer version
 
@@ -204,8 +198,9 @@ fi
 # mode 2: build apptainer image from Dockerfile
 if [[ "$source_type" == "Dockerfile" ]]; then
 
-  cmd1="podman build -t $dockerproject -f $source_file"
-  cmd2="apptainer build ${APPTAINER_ARGS[@]} $TARGET_CONTAINER $(podman images | awk '{print $1}' | awk 'NR==2')"
+  dockerproject="$(basename $(dirname $source_file)).$RANDOM"
+  cmd1="podman build --no-cache -t $dockerproject -f $source_file"
+  cmd2="apptainer build ${APPTAINER_ARGS[@]} $TARGET_CONTAINER $dockerproject" #$(podman images | awk '{print $1}' | awk 'NR==2')"
 
   if [ $dry_run = true ]; then
     printf "Commands that run when not in dry_run (-d) mode:\n"
