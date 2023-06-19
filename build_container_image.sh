@@ -12,10 +12,13 @@ SANDBOX_ALLOWED=1
 
 
 print_help_text() {
-  printf "\nCreate a Singularity/Apptainer container. You can choose to make a sif file or a sandbox. Input source can be a def file, Dockerfile or Docker image.\n\n$SCRIPT [-h|-d] -t <sandbox|sif> -n <tool_name_for_output_file/directory> -v <tool_version_for_output_file/directory>\n\n"
+  printf "\nCreate a Singularity/Apptainer container. You can choose to make a sif file or a sandbox. Input source can be a def file, Dockerfile or Docker image.\n\n$SCRIPT [-h|-d] -t <sandbox|sif> -n <tool_name_for_output_file/directory> -v <tool_version_for_output_file/directory> -s <myproject/docker-repository-name>|<myimage:mytag>|<myfile.def>\n\n"
   echo "-i      Input source type, one of <def|Dockerfile|image>"
   echo "-n      name of the tool container to build. This will be combined with the version to make the container (either sif or directory) e.g. enter 'mynewtool' to create mynewtool-1.0.0 or mynewtool-1.0.0.sif (depending on the version and sandbox/sif mode entered). Will be created relative to the current working directory."
-  echo "-s      Source to use. Can be a def file, Dockerfile or Docker image name, according to the option -i"
+  echo "-s      Source to use. Can be a def file, Dockerfile or Docker image name, according to the option -i."
+  echo "         - Building from Dockerfile: the value should be the image name to be created, e.g. projectname/repository-name, i.e. the value expected if you were to run ’docker build -t myproject/repository-name .’"
+  echo "         - Building from Docker image: the value shold be <myimage:mytag>"
+  echo "         - Building from def file recipe: the value should be <myfile.def>"
   echo "-v      version of the tool to be added to the output filename e.g. '1.28'. This is combined with the tool name prefix to create for example mytool-1.28.sif or mytool-1.28/"
   echo "-t      type of container to build. Either sandbox or sif, i.e. -t <sandbox|sif>"
   echo "-d      Dry run - commands are displayed, but not run"
@@ -245,27 +248,52 @@ if [[ "$source_type" == "image" ]]; then
   if [ -z "$(podman images -q $docker_image)" ]; then
     echo "ERROR: Docker image $docker_image not found locally"
     exit 1
+  else 
+    # get repo name and tag from podman images output
+    podman_repo_name=$(podman images | grep $docker_image | tr -s ' ' | cut -d ' ' -f 1)
+    podman_repo_tag=$(podman images  | grep $docker_image | tr -s ' ' | cut -d ' ' -f 2)
+
+    if [ $podman_repo_tag == "latest" ]; then
+      docker_image=$podman_repo_name
+    else
+      docker_image="${podman_repo_name}:${podman_repo_tag}"
+    fi
+    echo "Debug: Using \"$podman_repo_name\" and tag \"$podman_repo_tag\" from \`podman images\` output"
   fi
 
-  # add "docker://" prefix to image name for build command
-  docker_image_regex="^docker://.*"
+  # Intermediate step of creating an uncompressed podman image file
+  # directory from a podman image 
+  timestamp=$(date +%s)
+  podman_tmp_image_dir="${timestamp}_podman_img" # timestamp used for unique tmp filename
+  echo "podman_image_dir: $podman_tmp_image_dir "
 
-  if [ ! -z $docker_image ] && ! [[ "$docker_image" =~ $docker_image_regex ]];
-  then
-    docker_image="docker://$docker_image"
+  cmd1="podman save --format oci-dir -o $podman_tmp_image_dir $docker_image"
+
+  if [ $dry_run = true ]; then
+    printf "Command that runs when not in dry_run (-d) mode:\n\t$cmd1\n"
+  else
+    printf "** Running: $cmd1\n"
+    $cmd1 && command1_success=1
+
+    if [ $command1_success != 1 ]; then
+      printf $failed_msg
+      exit 0;
+    fi
   fi
 
-  cmd="apptainer build ${APPTAINER_ARGS[@]} $TARGET_CONTAINER $docker_image"
+  cmd2="apptainer build --sandbox $TARGET_CONTAINER $podman_tmp_image_dir"
   
   if [ $dry_run = true ]; then
-    printf "Command that runs when not in dry_run (-d) mode:\n\t$cmd\n"
+    printf "Command that runs when not in dry_run (-d) mode:\n\t$cmd2\n"
   else
-    printf "** Running: $cmd\n"
-    $cmd && command1_success=1
+    printf "** Running: $cmd2\n"
+    $cmd2 && command2_success=1
+
+    rm -rf $podman_tmp_image_dir
   fi
 
   if  [ $dry_run = true ]; then
-    if [ $command1_success = 1 ]; then
+    if [ $command2_success = 1 ]; then
       printf $success_msg
       exit 0;
     else
