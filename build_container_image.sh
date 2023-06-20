@@ -16,7 +16,7 @@ print_help_text() {
   echo "-i      Input source type, one of <def|Dockerfile|image>"
   echo "-n      name of the tool container to build. This will be combined with the version to make the container (either sif or directory) e.g. enter 'mynewtool' to create mynewtool-1.0.0 or mynewtool-1.0.0.sif (depending on the version and sandbox/sif mode entered). Will be created relative to the current working directory."
   echo "-s      Source to use. Can be a def file, Dockerfile or Docker image name, according to the option -i."
-  echo "         - Building from Dockerfile: the value should be the image name to be created, e.g. projectname/repository-name, i.e. the value expected if you were to run ’docker build -t myproject/repository-name .’"
+  echo "         - Building from Dockerfile: the value should be the path to the Dockerfile"
   echo "         - Building from Docker image: the value shold be <myimage:mytag>"
   echo "         - Building from def file recipe: the value should be <myfile.def>"
   echo "-v      version of the tool to be added to the output filename e.g. '1.28'. This is combined with the tool name prefix to create for example mytool-1.28.sif or mytool-1.28/"
