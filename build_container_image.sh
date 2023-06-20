@@ -142,7 +142,7 @@ if [[ "$source_type" == "Dockerfile" || "$source_type" == "image" ]];
 then
   if ! command -v podman &> /dev/null
   then
-    `module load podman`
+    module load podman
   fi
 
   if ! command -v podman &> /dev/null
