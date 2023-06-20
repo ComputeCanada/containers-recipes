@@ -203,12 +203,18 @@ if [[ "$source_type" == "Dockerfile" ]]; then
 
   dockerproject="$(basename $(dirname $source_file)).$RANDOM"
   cmd1="podman build --no-cache -t $dockerproject -f $source_file"
-  cmd2="apptainer build ${APPTAINER_ARGS[@]} $TARGET_CONTAINER $dockerproject" #$(podman images | awk '{print $1}' | awk 'NR==2')"
+  cmd2="podman save --format oci-archive -o $dockerproject.tar $dockerproject"
+  cmd3="apptainer build --fix-perms ${APPTAINER_ARGS[@]} $TARGET_CONTAINER oci-archive://$dockerproject.tar" 
+  cmd4="rm $dockerproject.tar"
+  cmd5="podman rmi $dockerproject"
 
   if [ $dry_run = true ]; then
     printf "Commands that run when not in dry_run (-d) mode:\n"
     echo "  $cmd1"
     echo "  $cmd2"
+    echo "  $cmd3"
+    echo "  $cmd4"
+    echo "  $cmd5"
   else
     printf "** Running: $cmd1\n"
     $cmd1 && command1_success=1
@@ -217,15 +223,30 @@ if [[ "$source_type" == "Dockerfile" ]]; then
       printf "\n** Running: $cmd2\n"
       $cmd2 && command2_success=1
     fi
+    if [ $command2_success = 1 ]; then
+      printf "\n** Running: $cmd3\n"
+      $cmd3 |& grep -v "EPERM" && command3_success=1
+    fi
+    if [ $command3_success = 1 ]; then
+      printf "\n** Running: $cmd4\n"
+      $cmd4 && command4_success=1
+    fi
+    if [ $command4_success = 1 ]; then
+      printf "\n** Running: $cmd5\n"
+      $cmd5 && command5_success=1
+    fi
   fi
 
   echo "command1_success: $command1_success"
   echo "command2_success: $command2_success"
+  echo "command3_success: $command3_success"
+  echo "command4_success: $command4_success"
+  echo "command5_success: $command5_success"
   echo "dry_run         : $dry_run"
   printf "success_msg     : $success_msg"
 
   if  [ $dry_run = true ]; then
-    if [ $command1_success = 1 ] && [ $command2_success = 1 ]; then
+    if [ $command1_success = 1 ] && [ $command2_success = 1 ] && [ $command3_success = 1] && [ $command4_success = 1] && [ $command5_success = 1]; then
       printf $success_msg
       exit 0;
     else
