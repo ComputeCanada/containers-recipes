@@ -204,7 +204,7 @@ if [[ "$source_type" == "Dockerfile" ]]; then
   dockerproject="$(basename $(dirname $source_file)).$RANDOM"
   cmd1="podman build --no-cache -t $dockerproject -f $source_file"
   cmd2="podman save --format oci-archive -o $dockerproject.tar $dockerproject"
-  cmd3="apptainer build --fix-perms ${APPTAINER_ARGS[@]} $TARGET_CONTAINER oci-archive://$dockerproject.tar" 
+  cmd3="apptainer build ${APPTAINER_ARGS[@]} $TARGET_CONTAINER oci-archive://$dockerproject.tar" 
   cmd4="rm $dockerproject.tar"
   cmd5="podman rmi $dockerproject"
 
