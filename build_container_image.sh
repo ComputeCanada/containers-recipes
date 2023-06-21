@@ -17,7 +17,7 @@ print_help_text() {
   echo "-n      name of the tool container to build. This will be combined with the version to make the container (either sif or directory) e.g. enter 'mynewtool' to create mynewtool-1.0.0 or mynewtool-1.0.0.sif (depending on the version and sandbox/sif mode entered). Will be created relative to the current working directory."
   echo "-s      Source to use. Can be a def file, Dockerfile or Docker image name, according to the option -i."
   echo "         - Building from Dockerfile: the value should be the path to the Dockerfile"
-  echo "         - Building from Docker image: the value shold be <myimage:mytag>"
+  echo "         - Building from a podman pull image: the value shold be the parameter you would typically pass to podman pull or docker pull"
   echo "         - Building from def file recipe: the value should be <myfile.def>"
   echo "-v      version of the tool to be added to the output filename e.g. '1.28'. This is combined with the tool name prefix to create for example mytool-1.28.sif or mytool-1.28/"
   echo "-t      type of container to build. Either sandbox or sif, i.e. -t <sandbox|sif>"
@@ -199,13 +199,20 @@ if [[ "$source_type" == "def" ]]; then
 fi
 
 # mode 2: build apptainer image from Dockerfile
-if [[ "$source_type" == "Dockerfile" ]]; then
-
-  dockerproject="$(basename $(dirname $source_file)).$RANDOM"
-  cmd1="podman build --no-cache -t $dockerproject -f $source_file"
-  cmd2="podman save --format oci-archive -o $dockerproject.tar $dockerproject"
-  cmd3="apptainer build ${APPTAINER_ARGS[@]} $TARGET_CONTAINER oci-archive://$dockerproject.tar" 
-  cmd4="rm $dockerproject.tar"
+# mode 3: build apptaimer image from pulling docker
+if [[ "$source_type" == "Dockerfile" || "$source_type" == "image" ]]; then
+  if [[ "$source_type" == "Dockerfile" ]]; then
+    dockerproject="$(basename $(dirname $source_file)).$RANDOM"
+    tmp_tarball="${dockerproject}.tar"
+    cmd1="podman build --no-cache -t $dockerproject -f $source_file"
+  else
+    dockerproject="$source_name"
+    tmp_tarball="$(basename $source_name | cut -d':' -f1).tar"
+    cmd1="podman pull $source_name"
+  fi
+  cmd2="podman save --format oci-archive -o $tmp_tarball $dockerproject"
+  cmd3="apptainer build ${APPTAINER_ARGS[@]} $TARGET_CONTAINER oci-archive://$tmp_tarball" 
+  cmd4="rm $tmp_tarball"
   cmd5="podman rmi $dockerproject"
 
   if [ $dry_run = true ]; then
@@ -258,70 +265,3 @@ if [[ "$source_type" == "Dockerfile" ]]; then
   fi
 fi
 
-
-# mode 3: build apptainer image from docker image 
-# (e.g. docker://myproject/myapp:latest)
-# Creates a sif file named myapp_latest.sif in the current directory
-if [[ "$source_type" == "image" ]]; then
-  docker_image=$source_name
-
-  # bail if docker image not found
-  if [ -z "$(podman images -q $docker_image)" ]; then
-    echo "ERROR: Docker image $docker_image not found locally"
-    exit 1
-  else 
-    # get repo name and tag from podman images output
-    podman_repo_name=$(podman images | grep $docker_image | tr -s ' ' | cut -d ' ' -f 1)
-    podman_repo_tag=$(podman images  | grep $docker_image | tr -s ' ' | cut -d ' ' -f 2)
-
-    if [ $podman_repo_tag == "latest" ]; then
-      docker_image=$podman_repo_name
-    else
-      docker_image="${podman_repo_name}:${podman_repo_tag}"
-    fi
-    echo "Debug: Using \"$podman_repo_name\" and tag \"$podman_repo_tag\" from \`podman images\` output"
-  fi
-
-  # Intermediate step of creating an uncompressed podman image file
-  # directory from a podman image 
-  timestamp=$(date +%s)
-  podman_tmp_image_dir="${timestamp}_podman_img" # timestamp used for unique tmp filename
-  echo "podman_image_dir: $podman_tmp_image_dir "
-
-  cmd1="podman save --format oci-dir -o $podman_tmp_image_dir $docker_image"
-
-  if [ $dry_run = true ]; then
-    printf "Command that runs when not in dry_run (-d) mode:\n\t$cmd1\n"
-  else
-    printf "** Running: $cmd1\n"
-    $cmd1 && command1_success=1
-
-    if [ $command1_success != 1 ]; then
-      printf $failed_msg
-      exit 0;
-    fi
-  fi
-
-  cmd2="apptainer build --sandbox $TARGET_CONTAINER $podman_tmp_image_dir"
-  
-  if [ $dry_run = true ]; then
-    printf "Command that runs when not in dry_run (-d) mode:\n\t$cmd2\n"
-  else
-    printf "** Running: $cmd2\n"
-    $cmd2 && command2_success=1
-
-    rm -rf $podman_tmp_image_dir
-  fi
-
-  if  [ $dry_run = true ]; then
-    if [ $command2_success = 1 ]; then
-      printf $success_msg
-      exit 0;
-    else
-      printf $failed_msg
-      exit 1;
-    fi
-  else
-    exit 0; # exit from dry run
-  fi
-fi  
