@@ -26,7 +26,7 @@ else
 	SANDBOX_ALLOWED=1
 fi
 TARGET_CONTAINER=
-
+WORK_DIR=/tmp/container-builder-$RANDOM
 
 print_help_text() {
   printf "\nCreate a Singularity/Apptainer container. You can choose to make a sif file or a sandbox. Input source can be a def file, Dockerfile or Docker image.\n\n$SCRIPT [-h|-d] -t <sandbox|sif> -n <tool_name_for_output_file/directory> -v <tool_version_for_output_file/directory> -s <myproject/docker-repository-name>|<myimage:mytag>|<myfile.def>\n\n"
@@ -81,6 +81,9 @@ done
 #echo "docker_image   = $docker_image";
 #echo "dry_run        = $dry_run";
 #printf "\n"
+
+echo "Working in directory $WORK_DIR"
+mkdir -p $WORK_DIR && cd $WORK_DIR
 
 if [[ -z $source_name ]]; then
 	echo "ERROR: You must specify a source (option -s)"
@@ -282,3 +285,5 @@ if [[ "$source_type" == "Dockerfile" || "$source_type" == "image" ]]; then
   fi
 fi
 
+echo "Cleaning up $WORK_DIR"
+rm -rf $WORK_DIR
