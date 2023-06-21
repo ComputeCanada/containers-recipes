@@ -1,21 +1,41 @@
 #!/bin/bash
 
 # Author: Gemma Hoad (ghoad@sfu.ca)
+# Author: Maxime Boissonneault (maxime.boissonneault@calculquebec.ca)
 
 SCRIPT=$(readlink -f "$0")
 
-TARGET_DIR=$PWD
+if [[ ! -z $CONTAINER_BUILDER_TARGET_DIR ]]; then
+	TARGET_DIR=$CONTAINER_BUILDER_TARGET_DIR
+else
+	TARGET_DIR=$PWD
+fi
+if [[ ! -z $CONTAINER_BUILDER_SOURCE_DIR ]]; then
+	SOURCE_DIR=$CONTAINER_BUILDER_SOURCE_DIR
+else
+	SOURCE_DIR=$PWD
+fi
+if [[ ! -z $CONTAINER_BUILDER_SIF_ALLOWED ]]; then
+	SIF_ALLOWED=$CONTAINER_BUILDER_SIF_ALLOWED
+else
+	SIF_ALLOWED=1
+fi
+if [[ ! -z $CONTAINER_BUILDER_SANDBOX_ALLOWED ]]; then
+	SANDBOX_ALLOWED=$CONTAINER_BUILDER_SANDBOX_ALLOWED
+else
+	SANDBOX_ALLOWED=1
+fi
 TARGET_CONTAINER=
-SIF_ALLOWED=0
-SANDBOX_ALLOWED=1
-
+WORK_DIR=/tmp/container-builder-$RANDOM
 
 print_help_text() {
-  printf "\nCreate a Singularity/Apptainer container. You can choose to make a sif file or a sandbox. Input source can be a def file, Dockerfile or Docker image.\n\n$SCRIPT [-h|-d] -t <sandbox|sif> [-a <def file>] [-b <myproject/docker-repository-name>] [-c <docker image>] -n <tool_name_for_output_file/directory> -v <tool_version_for_output_file/directory>\n\n"
-  echo "-a      build Apptainer image from def file recipe (<myfile.def>)"
-  echo "-b      build Apptainer image from a Dockerfile. You must run this script from the directory containing the Dockerfile. The value required by this option is the image name to be created, e.g. projectname/repository-name, i.e. the value expected if you were to run 'docker build -t myproject/repository-name .'"
-  echo "-c      create Apptainer image from Docker image (<myimage:mytag>)"
+  printf "\nCreate a Singularity/Apptainer container. You can choose to make a sif file or a sandbox. Input source can be a def file, Dockerfile or Docker image.\n\n$SCRIPT [-h|-d] -t <sandbox|sif> -n <tool_name_for_output_file/directory> -v <tool_version_for_output_file/directory> -s <myproject/docker-repository-name>|<myimage:mytag>|<myfile.def>\n\n"
+  echo "-i      Input source type, one of <def|Dockerfile|image>"
   echo "-n      name of the tool container to build. This will be combined with the version to make the container (either sif or directory) e.g. enter 'mynewtool' to create mynewtool-1.0.0 or mynewtool-1.0.0.sif (depending on the version and sandbox/sif mode entered). Will be created relative to the current working directory."
+  echo "-s      Source to use. Can be a def file, Dockerfile or Docker image name, according to the option -i."
+  echo "         - Building from Dockerfile: the value should be the path to the Dockerfile"
+  echo "         - Building from a podman pull image: the value shold be the parameter you would typically pass to podman pull or docker pull"
+  echo "         - Building from def file recipe: the value should be <myfile.def>"
   echo "-v      version of the tool to be added to the output filename e.g. '1.28'. This is combined with the tool name prefix to create for example mytool-1.28.sif or mytool-1.28/"
   echo "-t      type of container to build. Either sandbox or sif, i.e. -t <sandbox|sif>"
   echo "-d      Dry run - commands are displayed, but not run"
@@ -38,11 +58,10 @@ fi
 
 dry_run=false
 #retrieve arguments with flags
-while getopts "a:b:c:v:t:n:hd" opt; do
+while getopts "v:t:n:s:i:hd" opt; do
     case $opt in
-        a) def_file=$OPTARG;;
-        b) dockerproject=$OPTARG;;
-        c) docker_image=$OPTARG;;
+	s) source_name=$OPTARG;;
+	i) source_type=$OPTARG;;
         v) version=$OPTARG;;
         n) tool_name=$OPTARG;;
 	t) container_type=$OPTARG;;
@@ -55,7 +74,6 @@ while getopts "a:b:c:v:t:n:hd" opt; do
 done
 
 # debug statements
-#echo "def_file       = $def_file";
 #echo "dockerproject  = $dockerproject";
 #echo "tool_name      = $tool_name";
 #echo "container_type = $container_type";
@@ -64,18 +82,31 @@ done
 #echo "dry_run        = $dry_run";
 #printf "\n"
 
-# Bail if too many options are provided 
-# (i.e. if user requests sif file builds from multiple sources)
-if ( [ ! -z $def_file ] && [ ! -z $dockerproject ] ) ||
-        ( [ ! -z $def_file ] && [ ! -z $docker_image ] ) ||
-        ( [ ! -z $docker_image ] && [ ! -z $dockerproject ] );
-then
-  echo "ERROR: You must use options -a (build from def file), -b (build from Dockerfile - myuser/repository-name) and -c (build from docker image) exclusively (not together)."
-  exit 1
-fi
+echo "Working in directory $WORK_DIR"
+mkdir -p $WORK_DIR && cd $WORK_DIR
 
+if [[ -z $source_name ]]; then
+	echo "ERROR: You must specify a source (option -s)"
+	exit 1
+fi
+if [[ "$source_type" != "def" && "$source_type" != "Dockerfile" && "$source_type" != "image" ]]; then
+	echo "ERROR: Unknown source type $source_type. Source type (option -i) must be either def, Dockerfile or image"
+	exit 1;
+fi
+if [[ "$source_type" == "def" || "$source_type" == "Dockerfile" ]]; then
+	if [[ ${source_name::1} == "/" || ${source_name::1} == "." || ${source_name::1} == "~" ]]; then
+		echo "ERROR: source file $source_name should not start with /, . or ~"
+		echo "Please provide a relative path within $SOURCE_DIR"
+		exit 1
+	fi
+	source_file=$SOURCE_DIR/$source_name
+	if [[ ! -f $source_file ]]; then
+		echo "ERROR: File not found $source_file"
+		exit 1;
+	fi
+fi
 if [[ "$container_type" != "sandbox" && "$container_type" != "sif" ]]; then
-	echo "Unknown container type requested: $container_type. Valid values are <sif|container>."
+	echo "ERROR: Unknown container type requested: $container_type. Valid values for option -t are <sif|sandbox>."
 	exit 1;
 fi
 if [[ "$container_type" == "sif" && "$SIF_ALLOWED" -eq 0 ]]; then
@@ -86,23 +117,10 @@ if [[ "$container_type" == "sandbox" && "$SANDBOX_ALLOWED" -eq 0 ]]; then
 	echo "sandbox container requested, but sandbox support disabled. Please build the container as a sif image"
 	exit 1;
 fi
+
 APPTAINER_ARGS=()
 if [[ "$container_type" == "sandbox" ]]; then
 	APPTAINER_ARGS+=(--sandbox)
-fi
-
-# if string is defined and file does not exist, bail.
-if [ ! -z $def_file ] && [ ! -f $def_file ];
-then
-  echo "ERROR: File not found (-a option): $def_file"
-  exit 1;
-fi
-
-# if string is defined and Dockerfile does not exist in the current directory, bail.
-if  [ ! -z $dockerproject ] && [ ! -f "Dockerfile" ];
-then
-  echo "ERROR: Dockerfile not found. Please change directory to where the Dockerfile is located."
-  exit 1;
 fi
 
 # if version is absent or not numeric, bail.
@@ -140,11 +158,11 @@ fi
 
 # if building a sif file from a dockerfile or image, 
 # podman must be installed, or bail.
-if [ ! -z $dockerproject ] || [ ! -z $docker_image ];
+if [[ "$source_type" == "Dockerfile" || "$source_type" == "image" ]];
 then
   if ! command -v podman &> /dev/null
   then
-    `module load podman`
+    module load podman
   fi
 
   if ! command -v podman &> /dev/null
@@ -166,7 +184,7 @@ fi
 
 echo "Loading apptainer modules..."
 #module use /cvmfs/soft-dev.computecanada.ca/easybuild/modules/2020/Core
-module load apptainer/1.1.3
+module load apptainer/1.1
 printf "apptainer version: "
 apptainer version
 
@@ -176,8 +194,8 @@ failed_msg="\nERROR: build failed\n"
 success_msg="\nBuild completed successfully!\nNew Apptainer/Singularity image: $TARGET_CONTAINER\n"
 
 # mode 1: build apptainer image from def file
-if [ ! -z $def_file ]; then
-  cmd="apptainer build ${APPTAINER_ARGS[@]} $TARGET_CONTAINER $def_file"
+if [[ "$source_type" == "def" ]]; then
+  cmd="apptainer build ${APPTAINER_ARGS[@]} $TARGET_CONTAINER $source_file"
   echo "Building from def file (creating Apptainer image from recipe"
 
   if [ $dry_run = true ]; then
@@ -200,24 +218,32 @@ if [ ! -z $def_file ]; then
   fi
 fi
 
-# We've upgraded this script to using podman which does not need root privs.
-## if we've reached this stage, we need to be root to access the docker images
-##if [ "$EUID" -ne 0 ]
-##  then echo "Please run as root, so the script can access podman images"
-##  exit
-##fi
-
-
 # mode 2: build apptainer image from Dockerfile
-if [ ! -z $dockerproject ]; then
-
-  cmd1="podman build -t $dockerproject ."
-  cmd2="apptainer build ${APPTAINER_ARGS[@]} $TARGET_CONTAINER $(podman images | awk '{print $1}' | awk 'NR==2')"
+# mode 3: build apptaimer image from pulling docker
+if [[ "$source_type" == "Dockerfile" || "$source_type" == "image" ]]; then
+  if [[ "$source_type" == "Dockerfile" ]]; then
+    dockerproject="$(basename $(dirname $source_file)).$RANDOM"
+    tmp_tarball="${dockerproject}.tar"
+    cmd1="podman build --no-cache -t $dockerproject -f $source_file"
+    grep $USER /etc/subuid > /dev/null || echo "WARNING: User $USER does not have subuid privilege on this node. Some builds may fail. Contact your administrator if needed."
+    grep $USER /etc/subgid > /dev/null || echo "WARNING: User $USER does not have subgid privilege on this node. Some builds may fail. Contact your administrator if needed."
+  else
+    dockerproject="$source_name"
+    tmp_tarball="$(basename $source_name | cut -d':' -f1).tar"
+    cmd1="podman pull $source_name"
+  fi
+  cmd2="podman save --format oci-archive -o $tmp_tarball $dockerproject"
+  cmd3="apptainer build ${APPTAINER_ARGS[@]} $TARGET_CONTAINER oci-archive://$tmp_tarball" 
+  cmd4="rm $tmp_tarball"
+  cmd5="podman rmi $dockerproject"
 
   if [ $dry_run = true ]; then
     printf "Commands that run when not in dry_run (-d) mode:\n"
     echo "  $cmd1"
     echo "  $cmd2"
+    echo "  $cmd3"
+    echo "  $cmd4"
+    echo "  $cmd5"
   else
     printf "** Running: $cmd1\n"
     $cmd1 && command1_success=1
@@ -226,15 +252,30 @@ if [ ! -z $dockerproject ]; then
       printf "\n** Running: $cmd2\n"
       $cmd2 && command2_success=1
     fi
+    if [ $command2_success = 1 ]; then
+      printf "\n** Running: $cmd3\n"
+      $cmd3 |& grep -v "EPERM" && command3_success=1
+    fi
+    if [ $command3_success = 1 ]; then
+      printf "\n** Running: $cmd4\n"
+      $cmd4 && command4_success=1
+    fi
+    if [ $command4_success = 1 ]; then
+      printf "\n** Running: $cmd5\n"
+      $cmd5 && command5_success=1
+    fi
   fi
 
   echo "command1_success: $command1_success"
   echo "command2_success: $command2_success"
+  echo "command3_success: $command3_success"
+  echo "command4_success: $command4_success"
+  echo "command5_success: $command5_success"
   echo "dry_run         : $dry_run"
   printf "success_msg     : $success_msg"
 
   if  [ $dry_run = true ]; then
-    if [ $command1_success = 1 ] && [ $command2_success = 1 ]; then
+    if [ $command1_success = 1 ] && [ $command2_success = 1 ] && [ $command3_success = 1] && [ $command4_success = 1] && [ $command5_success = 1]; then
       printf $success_msg
       exit 0;
     else
@@ -246,44 +287,5 @@ if [ ! -z $dockerproject ]; then
   fi
 fi
 
-
-# mode 3: build apptainer image from docker image 
-# (e.g. docker://myproject/myapp:latest)
-# Creates a sif file named myapp_latest.sif in the current directory
-if [ ! -z $docker_image ]; then
-
-  # bail if docker image not found
-  if [ -z "$(podman images -q $docker_image)" ]; then
-    echo "ERROR: Docker image $docker_image not found locally"
-    exit 1
-  fi
-
-  # add "docker://" prefix to image name for build command
-  docker_image_regex="^docker://.*"
-
-  if [ ! -z $docker_image ] && ! [[ "$docker_image" =~ $docker_image_regex ]];
-  then
-    docker_image="docker://$docker_image"
-  fi
-
-  cmd="apptainer build ${APPTAINER_ARGS[@]} $TARGET_CONTAINER $docker_image"
-  
-  if [ $dry_run = true ]; then
-    printf "Command that runs when not in dry_run (-d) mode:\n\t$cmd\n"
-  else
-    printf "** Running: $cmd\n"
-    $cmd && command1_success=1
-  fi
-
-  if  [ $dry_run = true ]; then
-    if [ $command1_success = 1 ]; then
-      printf $success_msg
-      exit 0;
-    else
-      printf $failed_msg
-      exit 1;
-    fi
-  else
-    exit 0; # exit from dry run
-  fi
-fi  
+echo "Cleaning up $WORK_DIR"
+rm -rf $WORK_DIR
