@@ -1,14 +1,31 @@
 #!/bin/bash
 
 # Author: Gemma Hoad (ghoad@sfu.ca)
+# Author: Maxime Boissonneault (maxime.boissonneault@calculquebec.ca)
 
 SCRIPT=$(readlink -f "$0")
 
-TARGET_DIR=$PWD
-SOURCE_DIR=$PWD
+if [[ ! -z $CONTAINER_BUILDER_TARGET_DIR ]]; then
+	TARGET_DIR=$CONTAINER_BUILDER_TARGET_DIR
+else
+	TARGET_DIR=$PWD
+fi
+if [[ ! -z $CONTAINER_BUILDER_SOURCE_DIR ]]; then
+	SOURCE_DIR=$CONTAINER_BUILDER_SOURCE_DIR
+else
+	SOURCE_DIR=$PWD
+fi
+if [[ ! -z $CONTAINER_BUILDER_SIF_ALLOWED ]]; then
+	SIF_ALLOWED=$CONTAINER_BUILDER_SIF_ALLOWED
+else
+	SIF_ALLOWED=1
+fi
+if [[ ! -z $CONTAINER_BUILDER_SANDBOX_ALLOWED ]]; then
+	SANDBOX_ALLOWED=$CONTAINER_BUILDER_SANDBOX_ALLOWED
+else
+	SANDBOX_ALLOWED=1
+fi
 TARGET_CONTAINER=
-SIF_ALLOWED=1
-SANDBOX_ALLOWED=1
 
 
 print_help_text() {
