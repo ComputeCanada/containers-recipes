@@ -225,6 +225,8 @@ if [[ "$source_type" == "Dockerfile" || "$source_type" == "image" ]]; then
     dockerproject="$(basename $(dirname $source_file)).$RANDOM"
     tmp_tarball="${dockerproject}.tar"
     cmd1="podman build --no-cache -t $dockerproject -f $source_file"
+    grep $USER /etc/subuid > /dev/null || echo "WARNING: User $USER does not have subuid privilege on this node. Some builds may fail. Contact your administrator if needed."
+    grep $USER /etc/subgid > /dev/null || echo "WARNING: User $USER does not have subgid privilege on this node. Some builds may fail. Contact your administrator if needed."
   else
     dockerproject="$source_name"
     tmp_tarball="$(basename $source_name | cut -d':' -f1).tar"
