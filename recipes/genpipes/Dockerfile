@@ -2,6 +2,12 @@
 # Genpipes in a container repository: https://github.com/c3g/genpipes_in_a_container
 # Main Genpipes repository: https://bitbucket.org/mugqic/genpipes/src
 # Author: Pierre-Olivier Quirion (@poquirion)  
+#
+# To run with podman
+# podman run  --rm   --device /dev/fuse --cap-add SYS_ADMIN  -it  -v /tmp:/tmp  --mount type=volume,source=cvmfs_cache,destination=/cvmfs-cache  <genpipes_image> 
+# To run with singularity
+# mkdir ~/cvmfs_cache
+# singularity run  -S /var/run/cvmfs -B ~/cvmfs_cache:/cvmfs-cache --fusemount "container:cvmfs2 cvmfs-config.computecanada.ca /cvmfs/cvmfs-config.computecanada.ca"    --fusemount "container:cvmfs2 soft.mugqic /cvmfs/soft.mugqic"   --fusemount "container:cvmfs2 ref.mugqic /cvmfs/ref.mugqic" <genpipes_image>
 
 FROM centos:7.9.2009
 MAINTAINER P-O Quirion po.quirion@mcgill.ca
@@ -46,4 +52,3 @@ RUN ["ln", "-s", "/usr/local/etc/genpiperc", "/etc/profile.d/z90_genpipes.sh"]
 ADD init_genpipes /usr/local/bin/init_genpipes
 RUN chmod 755 /usr/local/bin/init_genpipes
 ENTRYPOINT ["init_genpipes"]
-#docker build --tag c3genomics/genpipes:alpha -f Dockerfile . && singularity build -F ../genpipes_alpha.sif docker-daemon://c3genomics/genpipes:alpha
