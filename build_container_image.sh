@@ -203,7 +203,7 @@ success_msg="\nBuild completed successfully!\nNew Apptainer/Singularity image: $
 
 # mode 1: build apptainer image from def file
 if [[ "$source_type" == "def" ]]; then
-  cmd="apptainer build ${APPTAINER_ARGS[@]} $TARGET_CONTAINER $source_file"
+  cmd="apptainer build --fix-perms ${APPTAINER_ARGS[@]} $TARGET_CONTAINER $source_file"
   echo "Building from def file (creating Apptainer image from recipe"
 
   if [ $dry_run = true ]; then
@@ -243,7 +243,7 @@ if [[ "$source_type" == "Dockerfile" || "$source_type" == "image" ]]; then
     cmd1="podman pull $source_name"
   fi
   cmd2="podman save --format oci-archive -o $tmp_tarball $dockerproject"
-  cmd3="apptainer build ${APPTAINER_ARGS[@]} $TARGET_CONTAINER oci-archive://$tmp_tarball" 
+  cmd3="apptainer build --fix-perms ${APPTAINER_ARGS[@]} $TARGET_CONTAINER oci-archive://$tmp_tarball" 
   cmd4="rm $tmp_tarball"
   cmd5="podman rmi $dockerproject"
 
