@@ -28,6 +28,14 @@ fi
 TARGET_CONTAINER=
 WORK_DIR=/tmp/container-builder-$RANDOM
 
+function cleanup {
+	echo "Adjusting permissions of $TARGET_CONTAINER with chmod -R u+w go+rX"
+	chmod -R u+w go+rX $TARGET_CONTAINER
+
+	echo "Cleaning up $WORK_DIR"
+	rm -rf $WORK_DIR
+}
+
 print_help_text() {
   printf "\nCreate a Singularity/Apptainer container. You can choose to make a sif file or a sandbox. Input source can be a def file, Dockerfile or Docker image.\n\n$SCRIPT [-h|-d] -t <sandbox|sif> -n <tool_name_for_output_file/directory> -v <tool_version_for_output_file/directory> -s <myproject/docker-repository-name>|<myimage:mytag>|<myfile.def>\n\n"
   echo "-i      Input source type, one of <def|Dockerfile|image>"
@@ -208,11 +216,14 @@ if [[ "$source_type" == "def" ]]; then
   if [ $dry_run = true ]; then
     if [ $command1_success = 1 ]; then
       printf $success_msg
+      cleanup
     else
       printf $failed_msg
+      cleanup
       exit 1;
     fi
   else
+    cleanup
     exit 0; # exit from dry run
   fi
 fi
@@ -276,17 +287,16 @@ if [[ "$source_type" == "Dockerfile" || "$source_type" == "image" ]]; then
   if  [ $dry_run = true ]; then
     if [ $command1_success = 1 ] && [ $command2_success = 1 ] && [ $command3_success = 1] && [ $command4_success = 1] && [ $command5_success = 1]; then
       printf $success_msg
+      cleanup
+      exit 0;
     else
       printf $failed_msg
+      cleanup
       exit 1;
     fi
   else
+    cleanup
     exit 0; # exit from dry run
   fi
 fi
 
-echo "Adjusting permissions of $TARGET_CONTAINER with chmod -R u+w go+rX"
-chmod -R u+w go+rX $TARGET_CONTAINER
-
-echo "Cleaning up $WORK_DIR"
-rm -rf $WORK_DIR
