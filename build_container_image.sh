@@ -29,8 +29,12 @@ TARGET_CONTAINER=
 WORK_DIR=/tmp/container-builder-$RANDOM
 
 function cleanup {
-	echo "Adjusting permissions of $TARGET_CONTAINER with chmod -R u+w,go+rX"
-	chmod -R u+w,go+rX $TARGET_CONTAINER
+	if [[ $USER == "containeruser" ]]; then
+		echo "Changing owner of the container directory to containeruser:rsnt_containers with sudo /usr/bin/chown -R containeruser:rsnt_containers /cvmfs/containers.computecanada.ca/content/containers"
+		sudo /usr/bin/chown -R containeruser:rsnt_containers $TARGET_CONTAINER
+		echo "Adjusting permissions of $TARGET_CONTAINER with chmod -R u+w,go+rX $TARGET_CONTAINER"
+		chmod -R u+w,go+rX $TARGET_CONTAINER
+	fi
 
 	echo "Cleaning up $WORK_DIR"
 	rm -rf $WORK_DIR
@@ -203,7 +207,7 @@ success_msg="\nBuild completed successfully!\nNew Apptainer/Singularity image: $
 
 # mode 1: build apptainer image from def file
 if [[ "$source_type" == "def" ]]; then
-  cmd="apptainer build --fix-perms --fakeroot --userns ${APPTAINER_ARGS[@]} $TARGET_CONTAINER $source_file"
+  cmd="apptainer build ${APPTAINER_ARGS[@]} $TARGET_CONTAINER $source_file"
   echo "Building from def file (creating Apptainer image from recipe"
 
   if [ $dry_run = true ]; then
@@ -243,7 +247,7 @@ if [[ "$source_type" == "Dockerfile" || "$source_type" == "image" ]]; then
     cmd1="podman pull $source_name"
   fi
   cmd2="podman save --format oci-archive -o $tmp_tarball $dockerproject"
-  cmd3="apptainer build --fix-perms --fakeroot --userns ${APPTAINER_ARGS[@]} $TARGET_CONTAINER oci-archive://$tmp_tarball" 
+  cmd3="apptainer build ${APPTAINER_ARGS[@]} $TARGET_CONTAINER oci-archive://$tmp_tarball" 
   cmd4="rm $tmp_tarball"
   cmd5="podman rmi $dockerproject"
 
