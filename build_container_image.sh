@@ -208,7 +208,6 @@ if [[ "$source_type" == "def" ]]; then
   if [ $dry_run = true ]; then
     if [ $command1_success = 1 ]; then
       printf $success_msg
-      exit 0;
     else
       printf $failed_msg
       exit 1;
@@ -277,7 +276,6 @@ if [[ "$source_type" == "Dockerfile" || "$source_type" == "image" ]]; then
   if  [ $dry_run = true ]; then
     if [ $command1_success = 1 ] && [ $command2_success = 1 ] && [ $command3_success = 1] && [ $command4_success = 1] && [ $command5_success = 1]; then
       printf $success_msg
-      exit 0;
     else
       printf $failed_msg
       exit 1;
