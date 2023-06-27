@@ -30,7 +30,7 @@ WORK_DIR=/tmp/container-builder-$RANDOM
 
 function cleanup {
 	if [[ $USER == "containeruser" ]]; then
-		echo "Changing owner of the container directory to containeruser:rsnt_containers with sudo /usr/bin/chown -R containeruser:rsnt_containers /cvmfs/containers.computecanada.ca/content/containers"
+		echo "Changing owner of the container directory to containeruser:rsnt_containers with sudo /usr/bin/chown -R containeruser:rsnt_containers $TARGET_CONTAINER"
 		sudo /usr/bin/chown -R containeruser:rsnt_containers $TARGET_CONTAINER
 		echo "Adjusting permissions of $TARGET_CONTAINER with chmod -R u+w,go+rX $TARGET_CONTAINER"
 		chmod -R u+w,go+rX $TARGET_CONTAINER
