@@ -287,5 +287,8 @@ if [[ "$source_type" == "Dockerfile" || "$source_type" == "image" ]]; then
   fi
 fi
 
+echo "Adjusting permissions of $TARGET_CONTAINER with chmod -R u+w go+rX"
+chmod -R u+w go+rX $TARGET_CONTAINER
+
 echo "Cleaning up $WORK_DIR"
 rm -rf $WORK_DIR
