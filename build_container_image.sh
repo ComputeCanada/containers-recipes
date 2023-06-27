@@ -29,8 +29,8 @@ TARGET_CONTAINER=
 WORK_DIR=/tmp/container-builder-$RANDOM
 
 function cleanup {
-	echo "Adjusting permissions of $TARGET_CONTAINER with chmod -R u+w go+rX"
-	chmod -R u+w go+rX $TARGET_CONTAINER
+	echo "Adjusting permissions of $TARGET_CONTAINER with chmod -R u+w,go+rX"
+	chmod -R u+w,go+rX $TARGET_CONTAINER
 
 	echo "Cleaning up $WORK_DIR"
 	rm -rf $WORK_DIR
