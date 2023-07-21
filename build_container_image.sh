@@ -4,7 +4,7 @@
 # Author: Maxime Boissonneault (maxime.boissonneault@calculquebec.ca)
 
 SCRIPT=$(readlink -f "$0")
-
+TMPDIR=/tmp
 if [[ ! -z $CONTAINER_BUILDER_TARGET_DIR ]]; then
 	TARGET_DIR=$CONTAINER_BUILDER_TARGET_DIR
 else
