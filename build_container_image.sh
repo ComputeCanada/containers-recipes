@@ -34,6 +34,8 @@ function cleanup {
 		sudo /usr/bin/chown -R containeruser:rsnt_containers $TARGET_CONTAINER
 		echo "Adjusting permissions of $TARGET_CONTAINER with chmod -R u+w,go+rX $TARGET_CONTAINER"
 		chmod -R u+w,go+rX $TARGET_CONTAINER
+		echo "Tagging large folders for cataloging by CVMFS"
+		autocatalog.py --path $TARGET_CONTAINER --size 20000
 	fi
 
 	echo "Cleaning up $WORK_DIR"
