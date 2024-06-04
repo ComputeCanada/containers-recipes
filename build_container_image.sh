@@ -198,7 +198,7 @@ fi
 
 echo "Loading apptainer modules..."
 #module use /cvmfs/soft-dev.computecanada.ca/easybuild/modules/2020/Core
-module load apptainer/1.1
+module load apptainer
 printf "apptainer version: "
 apptainer version
 
