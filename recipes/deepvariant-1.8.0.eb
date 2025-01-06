@@ -20,11 +20,11 @@ installopts += '-n %(namelower)s '
 installopts += '-v %(version)s '
 
 container_path = '/cvmfs/containers.computecanada.ca/content/containers/%(namelower)s-%(version)s'
-aliases = ["qiime"]
+aliases = ["deepvariant"]
 apptainer_params = '-c'
 
 sanity_check_paths = {
-    'files': ["opt/deepvariant/bin/deepvariant"],
+    'files': ["opt/deepvariant/bin/run_deepvariant"],
     'dirs': ["opt/deepvariant/bin"],
 }
 
